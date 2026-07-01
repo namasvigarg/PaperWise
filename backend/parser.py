@@ -23,6 +23,7 @@ class AcademicPDFParser:
             "metadata": self.metadata,
             "sections": self.sections,
             "references": self.references_raw,
+            "pages": self.pages,
             "page_count": len(self.doc)
         }
 

@@ -23,7 +23,6 @@ export default function ProfilePage() {
   const [role, setRole] = useState<string>("Researcher");
 
   // Auth fields
-  const [newEmail, setNewEmail] = useState<string>("");
   const [newPassword, setNewPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
 
@@ -31,6 +30,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [successMsg, setSuccessMsg] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"details" | "security">("details");
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -52,6 +52,20 @@ export default function ProfilePage() {
     setLoading(true);
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentEmail = user?.email || "";
+      
+      let emailUpdated = false;
+      if (email && email !== currentEmail) {
+        const { error: emailError } = await supabase.auth.updateUser({ email });
+        if (emailError) {
+          setErrorMsg(emailError.message);
+          setLoading(false);
+          return;
+        }
+        emailUpdated = true;
+      }
+
       const { error } = await supabase.auth.updateUser({
         data: {
           name,
@@ -63,7 +77,11 @@ export default function ProfilePage() {
       if (error) {
         setErrorMsg(error.message);
       } else {
-        setSuccessMsg("Profile information updated successfully!");
+        if (emailUpdated) {
+          setSuccessMsg("Profile information updated! A confirmation link has been sent to your new email.");
+        } else {
+          setSuccessMsg("Profile information updated successfully!");
+        }
         setTimeout(() => setSuccessMsg(""), 4000);
       }
     } catch (e) {
@@ -91,17 +109,6 @@ export default function ProfilePage() {
     setLoading(true);
 
     try {
-      if (newEmail && newEmail !== email) {
-        const { error } = await supabase.auth.updateUser({ email: newEmail });
-        if (error) {
-          setErrorMsg(error.message);
-          setLoading(false);
-          return;
-        }
-        setSuccessMsg("Email update initiated! A confirmation link has been sent to your new email.");
-        setNewEmail("");
-      }
-
       if (newPassword) {
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) {
@@ -126,7 +133,7 @@ export default function ProfilePage() {
     <div className="flex min-h-screen bg-[#0B0F19]">
       <Sidebar />
 
-      <main className="flex-1 ml-[260px] p-8 max-w-4xl animate-fade-in">
+      <main className="flex-1 ml-[260px] p-8 max-w-7xl animate-fade-in">
         {/* Header */}
         <header className="mb-8">
           <div>
@@ -153,145 +160,158 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <div className="flex flex-col gap-8 max-w-2xl">
-          {/* Card 1: Profile Details */}
-          <div className="glass-panel p-6 rounded-3xl border border-slate-800/60 shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="bg-indigo-500/10 p-2.5 rounded-xl text-indigo-400 border border-indigo-500/20">
-                <User className="w-5 h-5" />
-              </div>
-              <h3 className="text-md font-bold text-white">Profile Details</h3>
-            </div>
-
-            <form onSubmit={handleUpdateProfile} className="space-y-4">
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Full Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Dr. John Doe"
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Institution / Organization</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={institution}
-                    onChange={(e) => setInstitution(e.target.value)}
-                    placeholder="Stanford University"
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
-                    required
-                  />
-                  <School className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Professional Role</label>
-                <div className="relative">
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
-                    required
-                  >
-                    <option value="Researcher">Researcher</option>
-                    <option value="Student">Student</option>
-                    <option value="Professor">Professor</option>
-                    <option value="Software Engineer">Software Engineer</option>
-                    <option value="Data Scientist">Data Scientist</option>
-                    <option value="Other">Other</option>
-                  </select>
-                  <Briefcase className="absolute left-3.5 top-3 w-4 h-4 text-slate-505" />
-                </div>
-              </div>
-
-              <div className="pt-4">
+        <div className="glass-panel rounded-3xl border border-slate-800/60 overflow-hidden flex flex-col w-full shadow-xl">
+          {/* Tabs Selector */}
+          <div className="flex justify-start border-b border-slate-800/60 bg-slate-950/20 px-8">
+            {[
+              { id: "details", label: "Profile Details", icon: User },
+              { id: "security", label: "Account Security", icon: Lock },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-600/10 text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setErrorMsg("");
+                    setSuccessMsg("");
+                    setActiveTab(tab.id as any);
+                  }}
+                  className={`flex items-center gap-2 px-8 py-5 border-b-2 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === tab.id
+                      ? "border-indigo-500 text-white bg-indigo-500/5"
+                      : "border-transparent text-slate-400 hover:text-slate-200"
+                  }`}
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Save Profile
+                  <Icon className="w-3.5 h-3.5" />
+                  {tab.label}
                 </button>
-              </div>
-            </form>
+              );
+            })}
           </div>
 
-          {/* Card 2: Account Security */}
-          <div className="glass-panel p-6 rounded-3xl border border-slate-800/60 shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="bg-purple-500/10 p-2.5 rounded-xl text-purple-400 border border-purple-500/20">
-                <Lock className="w-5 h-5" />
-              </div>
-              <h3 className="text-md font-bold text-white">Account Security</h3>
-            </div>
-
-            <form onSubmit={handleUpdateAccount} className="space-y-4">
-              <div>
-                <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">Current Email Address</span>
-                <p className="text-xs text-slate-300 mt-1 font-semibold">{email}</p>
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">New Email Address</label>
-                <div className="relative">
+          <div className="p-8">
+            {/* Profile Details Form */}
+            {activeTab === "details" && (
+              <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-xl">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Full Name</label>
                   <input
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="new-email@university.edu"
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Dr. John Doe"
+                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
+                    required
                   />
-                  <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
                 </div>
-              </div>
 
-              <div className="border-t border-slate-800/60 my-4 pt-4">
-                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">New Password</label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
-                  />
-                  <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Email Address</label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="john.doe@example.com"
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-11 pr-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
+                      required
+                    />
+                    <Mail className="absolute left-4 top-3.5 w-4 h-4 text-slate-500" />
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Confirm New Password</label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
-                  />
-                  <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-505" />
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Institution / Organization</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={institution}
+                      onChange={(e) => setInstitution(e.target.value)}
+                      placeholder="Stanford University"
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-11 pr-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
+                      required
+                    />
+                    <School className="absolute left-4 top-3.5 w-4 h-4 text-slate-500" />
+                  </div>
                 </div>
-              </div>
 
-              <div className="pt-4">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl shadow-lg shadow-purple-600/10 text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Update Account
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Professional Role</label>
+                  <div className="relative">
+                    <select
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-11 pr-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
+                      required
+                    >
+                      <option value="Researcher">Researcher</option>
+                      <option value="Student">Student</option>
+                      <option value="Professor">Professor</option>
+                      <option value="Software Engineer">Software Engineer</option>
+                      <option value="Data Scientist">Data Scientist</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <Briefcase className="absolute left-4 top-3.5 w-4 h-4 text-slate-505" />
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-600/10 text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save Profile
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Account Security Form */}
+            {activeTab === "security" && (
+              <form onSubmit={handleUpdateAccount} className="space-y-6 max-w-xl">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">New Password</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-11 pr-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
+                    />
+                    <Lock className="absolute left-4 top-3.5 w-4 h-4 text-slate-500" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Confirm New Password</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-11 pr-4 py-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-all placeholder:text-slate-700"
+                    />
+                    <Lock className="absolute left-4 top-3.5 w-4 h-4 text-slate-550" />
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-purple-600/10 text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Update Account
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       </main>

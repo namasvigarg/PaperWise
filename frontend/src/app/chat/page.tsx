@@ -34,7 +34,6 @@ interface Message {
 const consolidateSections = (rawSections: Record<string, string>, abstractText: string): Record<string, string> => {
   const consolidated: Record<string, string> = {
     "Introduction": abstractText ? `Abstract:\n${abstractText}\n\n` : "",
-    "Related Work": "",
     "Methodology": "",
     "Experiments": "",
     "Conclusion": ""
@@ -48,18 +47,22 @@ const consolidateSections = (rawSections: Record<string, string>, abstractText: 
       return;
     }
 
-    let matchedCategory: "Introduction" | "Related Work" | "Methodology" | "Experiments" | "Conclusion" | null = null;
-    
-    if (rawKeyLower.includes("introduction") || rawKeyLower.includes("intro")) {
-      matchedCategory = "Introduction";
-    } else if (
+    // Skip related work/literature review
+    if (
       rawKeyLower.includes("related work") || 
       rawKeyLower.includes("literature review") || 
       rawKeyLower.includes("literature") || 
       rawKeyLower.includes("autonomy and new technologies") || 
-      rawKeyLower.includes("autonomy")
+      rawKeyLower.includes("autonomy") ||
+      rawKeyLower.startsWith("2")
     ) {
-      matchedCategory = "Related Work";
+      return;
+    }
+
+    let matchedCategory: "Introduction" | "Methodology" | "Experiments" | "Conclusion" | null = null;
+    
+    if (rawKeyLower.includes("introduction") || rawKeyLower.includes("intro")) {
+      matchedCategory = "Introduction";
     } else if (
       rawKeyLower.includes("methodology") || 
       rawKeyLower.includes("method") || 
@@ -93,8 +96,6 @@ const consolidateSections = (rawSections: Record<string, string>, abstractText: 
     if (!matchedCategory) {
       if (rawKeyLower.startsWith("1") || rawKeyLower.includes("title page") || rawKeyLower.includes("research paper") || rawKeyLower.includes("metadata") || rawKeyLower.includes("mariusz kruk")) {
         matchedCategory = "Introduction";
-      } else if (rawKeyLower.startsWith("2")) {
-        matchedCategory = "Related Work";
       } else if (rawKeyLower.startsWith("3")) {
         matchedCategory = "Methodology";
       } else if (rawKeyLower.startsWith("4")) {
@@ -113,9 +114,6 @@ const consolidateSections = (rawSections: Record<string, string>, abstractText: 
 
   if (!consolidated["Introduction"]) {
     consolidated["Introduction"] = "No explicit Introduction content extracted from the paper.";
-  }
-  if (!consolidated["Related Work"]) {
-    consolidated["Related Work"] = "No explicit Related Work or Literature Review content extracted from the paper.";
   }
   if (!consolidated["Methodology"]) {
     consolidated["Methodology"] = "No explicit Methodology content extracted from the paper.";
@@ -202,7 +200,7 @@ export default function ChatPage() {
         ]);
       }
       const savedActiveSection = sessionStorage.getItem("chat_active_section");
-      if (savedActiveSection) {
+      if (savedActiveSection && savedActiveSection !== "Related Work") {
         setActiveSection(savedActiveSection);
       } else {
         setActiveSection("Introduction");
@@ -225,13 +223,14 @@ export default function ChatPage() {
       const res = await fetch(`${API_BASE}/api/papers/${paper.id}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.sections && Object.keys(data.sections).length > 0) {
+        if (data.summarized_sections && Object.keys(data.summarized_sections).length > 0) {
+          setSections(data.summarized_sections);
+        } else if (data.sections && Object.keys(data.sections).length > 0) {
           const consolidated = consolidateSections(data.sections, paper.abstract);
           setSections(consolidated);
         } else {
           setSections({
             "Introduction": paper.abstract || "No content available",
-            "Related Work": "No content available",
             "Methodology": "No content available",
             "Experiments": "No content available",
             "Conclusion": "No content available"
@@ -240,7 +239,6 @@ export default function ChatPage() {
       } else {
         setSections({
           "Introduction": paper.abstract || "No content available",
-          "Related Work": "No content available",
           "Methodology": "No content available",
           "Experiments": "No content available",
           "Conclusion": "No content available"
@@ -250,7 +248,6 @@ export default function ChatPage() {
       console.error(e);
       setSections({
         "Introduction": paper.abstract || "No content available",
-        "Related Work": "No content available",
         "Methodology": "No content available",
         "Experiments": "No content available",
         "Conclusion": "No content available"

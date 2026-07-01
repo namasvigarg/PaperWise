@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
@@ -18,23 +17,6 @@ import {
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState<string>("");
-  const [userName, setUserName] = useState<string>("");
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        if (user.email) {
-          setUserEmail(user.email);
-        }
-        if (user.user_metadata?.name) {
-          setUserName(user.user_metadata.name);
-        }
-      }
-    };
-    fetchUser();
-  }, []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -92,20 +74,6 @@ export default function Sidebar() {
 
       {/* Footer Profile & Sign Out */}
       <div className="space-y-3.5">
-        {userEmail && (
-          <div className="bg-slate-900/60 border border-slate-850 p-3.5 rounded-xl flex items-center gap-2.5">
-            <div className="bg-slate-950 p-1.5 rounded-lg border border-slate-800 text-indigo-400 shrink-0">
-              <User className="w-3.5 h-3.5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <span className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Logged In As</span>
-              <p className="text-[11px] font-bold text-slate-300 truncate leading-none mt-0.5" title={userName || userEmail}>
-                {userName || userEmail}
-              </p>
-            </div>
-          </div>
-        )}
-
         <button
           onClick={handleSignOut}
           className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-red-500/20 text-red-400 hover:text-white hover:bg-red-500/10 transition-all text-xs font-bold cursor-pointer"

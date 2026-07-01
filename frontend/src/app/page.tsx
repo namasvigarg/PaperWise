@@ -417,7 +417,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Tabs Selector */}
-                <div className="flex border-b border-slate-800/60 bg-slate-950/20 px-6">
+                <div className="flex justify-center border-b border-slate-800/60 bg-slate-950/20 px-6">
                   {[
                     { id: "summary", label: "Executive Summary", icon: Sparkles },
                     { id: "metadata", label: "BibTeX & Metadata", icon: FileText },

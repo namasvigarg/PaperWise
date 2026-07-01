@@ -101,6 +101,16 @@ class RAGEngine:
         )
         
         chunks = []
+        import re
+        
+        def normalize(t: str) -> str:
+            return re.sub(r'[^a-zA-Z0-9]', '', t).lower()
+            
+        # Pre-normalize page texts for performance
+        normalized_pages = [
+            {"page_num": p["page_num"], "norm_text": normalize(p["text"])}
+            for p in parsed_data.get("pages", [])
+        ]
         
         # We walk through sections and split them
         for section_name, section_text in parsed_data.get("sections", {}).items():
@@ -109,12 +119,14 @@ class RAGEngine:
                 # Try to map this chunk back to a page number
                 # We do this by searching which page contains this chunk text
                 page_num = 1
-                for page in parsed_data.get("pages", []):
-                    # Check if a substantial part of the chunk is in the page text
-                    sample_text = text[:100]
-                    if sample_text in page["text"]:
-                        page_num = page["page_num"]
-                        break
+                sample_text = text[:150]
+                sample_text_norm = normalize(sample_text)
+                
+                if len(sample_text_norm) > 10:
+                    for page in normalized_pages:
+                        if sample_text_norm in page["norm_text"]:
+                            page_num = page["page_num"]
+                            break
                 
                 chunks.append({
                     "chunk_id": f"{section_name}_{idx}",
@@ -136,12 +148,19 @@ class RAGEngine:
         texts = [c["text"] for c in self.chunks]
         
         if self.client:
-            # Generate embeddings via API (OpenAI or Gemini)
-            response = self.client.embeddings.create(
-                input=texts,
-                model=self.model_name
-            )
-            self.embeddings = np.array([data.embedding for data in response.data], dtype=np.float32)
+            try:
+                # Generate embeddings via API (OpenAI or Gemini)
+                response = self.client.embeddings.create(
+                    input=texts,
+                    model=self.model_name
+                )
+                self.embeddings = np.array([data.embedding for data in response.data], dtype=np.float32)
+            except Exception as e:
+                print(f"API embedding generation failed, falling back to local model. Error: {e}")
+                local_model = self._get_local_model()
+                self.embeddings = np.array(local_model.encode(texts), dtype=np.float32)
+                # Adjust dimensions to match local model dimension (384)
+                self.embedding_dim = 384
         else:
             # Generate local embeddings
             local_model = self._get_local_model()
@@ -172,11 +191,16 @@ class RAGEngine:
         Generates a vector embedding for the query.
         """
         if self.client:
-            response = self.client.embeddings.create(
-                input=[query],
-                model=self.model_name
-            )
-            return np.array(response.data[0].embedding, dtype=np.float32)
+            try:
+                response = self.client.embeddings.create(
+                    input=[query],
+                    model=self.model_name
+                )
+                return np.array(response.data[0].embedding, dtype=np.float32)
+            except Exception as e:
+                print(f"API query embedding failed, falling back to local model. Error: {e}")
+                local_model = self._get_local_model()
+                return np.array(local_model.encode([query])[0], dtype=np.float32)
         else:
             local_model = self._get_local_model()
             return np.array(local_model.encode([query])[0], dtype=np.float32)
