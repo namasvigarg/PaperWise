@@ -635,5 +635,6 @@ if __name__ == "__main__":
     import uvicorn
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    # Exclude data folder from reload watching to prevent server restarts when files are uploaded/parsed
-    uvicorn.run("main:app", host=host, port=port, reload=True, reload_excludes=["**/data/**", "*.json", "*.pdf"])
+    # Disable reload in production to prevent high CPU usage and port scan timeouts
+    reload_mode = os.getenv("DEV_MODE", "false").lower() == "true"
+    uvicorn.run("main:app", host=host, port=port, reload=reload_mode)
