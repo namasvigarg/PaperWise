@@ -633,7 +633,7 @@ Provide a beginner-friendly explanation. Break down the mathematical/technical d
 
 if __name__ == "__main__":
     import uvicorn
-    host = os.getenv("HOST", "127.0.0.1")
+    host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
     # Exclude data folder from reload watching to prevent server restarts when files are uploaded/parsed
     uvicorn.run("main:app", host=host, port=port, reload=True, reload_excludes=["**/data/**", "*.json", "*.pdf"])
