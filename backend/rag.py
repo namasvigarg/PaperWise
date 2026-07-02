@@ -69,6 +69,12 @@ class RAGEngine:
                 if api_key:
                     self.client = openai.OpenAI(api_key=api_key)
 
+        # Check if we should use local embeddings to save API tokens
+        use_local_env = os.getenv("USE_LOCAL_EMBEDDINGS", "").lower()
+        # Default to local embeddings if explicitly set to true, or if using Gemini API key to prevent 429 errors
+        if use_local_env == "true" or (use_local_env == "" and os.getenv("GEMINI_API_KEY") is not None):
+            self.client = None
+
         if self.client:
             is_gemini = "generativelanguage.googleapis.com" in str(self.client.base_url) or bool(os.getenv("GEMINI_API_KEY"))
             if is_gemini:
