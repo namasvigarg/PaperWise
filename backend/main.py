@@ -159,10 +159,13 @@ The authors present a detailed framework that leverages contextual information t
 """
 
     if "literature review" in prompt_lower:
-        return """# Joint Literature Review Report
-
-## Executive Summary
+        return """## Executive Summary
 This synthesis covers the selected research works on neural architectures and optimization methods. The studies collectively present methods for increasing representation quality and reducing parameters.
+
+| Paper | Primary Focus | Key Methodology | Core Contribution |
+| :--- | :--- | :--- | :--- |
+| **Paper A** | Neural Attention Optimization | Sparse Attention Masks | 30% reduction in training FLOPs |
+| **Paper B** | Graph Representation Learning | Relation-Aware Message Passing | State-of-the-art accuracy on sparse nodes |
 
 ## Common Themes
 1. **Model Parameter Reductions**: Almost all reviewed papers focus heavily on reducing the parameters required for robust representation.
@@ -235,7 +238,7 @@ def load_paper_data(paper_id: str) -> Dict[str, Any]:
     if "pages" not in paper_data and "pdf_path" in paper_data and os.path.exists(paper_data["pdf_path"]):
         try:
             parser = AcademicPDFParser(paper_data["pdf_path"])
-            parsed_data = parser.parse()
+            parsed_data = parser.parse(llm_bridge=lambda prompt: call_llm(prompt))
             paper_data["pages"] = parsed_data.get("pages", [])
             # Save it back to the JSON file
             with open(json_path, "w", encoding="utf-8") as fw:
@@ -441,7 +444,7 @@ async def upload_paper(file: UploadFile = File(...), openai_key: Optional[str] =
     # Parse the PDF
     try:
         parser = AcademicPDFParser(pdf_path)
-        parsed_data = parser.parse()
+        parsed_data = parser.parse(llm_bridge=lambda prompt: call_llm(prompt, user_key=openai_key))
     except Exception as e:
         # Cleanup
         if os.path.exists(pdf_path):
@@ -739,14 +742,23 @@ def generate_literature_review(request: LitReviewRequest):
 
 Your output must be a professional academic synthesis in Markdown.
 CRITICAL: Do NOT include any introductory or concluding conversational text. Start immediately with the first heading.
-Keep the text under each heading extremely concise, direct, and to the point, avoiding unnecessary wordiness.
+Keep the text under each heading extremely concise, direct, and to the point, avoiding unnecessary wordiness. Use bold text, structured lists, and tables where appropriate to improve readability.
 
-Markdown structure:
-1. **Executive Summary**: High-level synthesis.
-2. **Common Methodology Trends**: What methods, architectures, or frameworks do these papers share?
-3. **Key Research Divergences**: Where do their findings or approaches contrast?
-4. **Synthesized Research Gaps**: What topics or problems are neglected by all of them combined?
-5. **Timeline / Development Flow**: Organize these papers into a conceptual evolution lineage.
+Please structure your review using the following Markdown headers:
+## Executive Summary
+Provide a high-level executive summary of the selected research works. Follow the paragraph with a Markdown comparison table summarizing each paper's primary focus, key methodology, and core contributions.
+
+## Common Methodology Trends
+Analyze the overlapping methods, architectures, or frameworks shared across these papers. Use bullet points with bold headers to list these trends.
+
+## Key Research Divergences
+Discuss where findings, approaches, assumptions, or scopes contrast between the papers.
+
+## Synthesized Research Gaps
+Synthesize critical research gaps neglected by all the papers combined. Highlight future research directions.
+
+## Conceptual Evolution Lineage
+Organize these papers into a conceptual evolution lineage, describing how each builds upon or diverges from the others.
 """
 
     review = call_llm(prompt, system_prompt="You are an expert academic reviewer writing a state-of-the-art literature review survey.", user_key=request.openai_key)

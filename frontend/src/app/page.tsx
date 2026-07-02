@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Trash2
 } from "lucide-react";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -452,8 +453,8 @@ export default function Dashboard() {
                           <p className="text-xs text-slate-400">Synthesizing contributions & limitations...</p>
                         </div>
                       ) : (
-                        <div className="prose prose-invert max-w-none text-xs leading-relaxed text-slate-300 space-y-4 whitespace-pre-line bg-slate-900/10 p-5 rounded-2xl border border-slate-800/40">
-                          {summary}
+                        <div className="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300 bg-slate-900/10 p-5 rounded-2xl border border-slate-800/40">
+                          <MarkdownRenderer content={summary} />
                         </div>
                       )}
                     </div>
@@ -464,7 +465,7 @@ export default function Dashboard() {
                     <div className="space-y-5">
                       <div>
                         <h4 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">Abstract</h4>
-                        <p className="text-xs leading-relaxed text-slate-300 bg-slate-900/30 p-4 rounded-xl border border-slate-800/40">
+                        <p className="text-sm leading-relaxed text-slate-300 bg-slate-900/30 p-4 rounded-xl border border-slate-800/40">
                           {selectedPaper.abstract}
                         </p>
                       </div>
@@ -480,7 +481,7 @@ export default function Dashboard() {
                             {copiedBibtex ? "Copied!" : "Copy BibTeX"}
                           </button>
                         </div>
-                        <pre className="bg-slate-950 p-4 rounded-xl text-[11px] font-mono text-indigo-300 border border-slate-800/80 overflow-x-auto">
+                        <pre className="bg-slate-950 p-4 rounded-xl text-xs font-mono text-indigo-300 border border-slate-800/80 overflow-x-auto">
                           {getBibtex()}
                         </pre>
                       </div>
@@ -496,8 +497,8 @@ export default function Dashboard() {
                           <p className="text-xs text-slate-400">Analyzing limitations and experimental gaps...</p>
                         </div>
                       ) : (
-                        <div className="prose prose-invert max-w-none text-xs leading-relaxed text-slate-300 space-y-4 whitespace-pre-line bg-slate-900/10 p-5 rounded-2xl border border-slate-800/40">
-                          {gaps}
+                        <div className="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300 bg-slate-900/10 p-5 rounded-2xl border border-slate-800/40">
+                          <MarkdownRenderer content={gaps} />
                         </div>
                       )}
                     </div>

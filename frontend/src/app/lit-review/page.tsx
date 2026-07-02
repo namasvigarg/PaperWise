@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 import { 
   Library, 
   Sparkles, 
@@ -32,7 +33,25 @@ export default function LitReviewPage() {
 
   useEffect(() => {
     fetchPapers();
+    const savedReview = sessionStorage.getItem("lit_review_result");
+    if (savedReview) setReview(savedReview);
   }, []);
+
+  useEffect(() => {
+    if (selectedIds.length > 0) {
+      sessionStorage.setItem("lit_selected_ids", JSON.stringify(selectedIds));
+    } else {
+      sessionStorage.removeItem("lit_selected_ids");
+    }
+  }, [selectedIds]);
+
+  useEffect(() => {
+    if (review) {
+      sessionStorage.setItem("lit_review_result", review);
+    } else {
+      sessionStorage.removeItem("lit_review_result");
+    }
+  }, [review]);
 
   const fetchPapers = async () => {
     try {
@@ -40,8 +59,20 @@ export default function LitReviewPage() {
       if (res.ok) {
         const data: Paper[] = await res.json();
         setPapers(data);
-        // Pre-select first 3 papers by default if they exist
-        if (data.length > 0) {
+        
+        const savedSelectedIds = sessionStorage.getItem("lit_selected_ids");
+        if (savedSelectedIds) {
+          try {
+            const parsed = JSON.parse(savedSelectedIds);
+            // Filter to make sure they are still valid paper IDs
+            const valid = parsed.filter((id: string) => data.some(p => p.id === id));
+            setSelectedIds(valid);
+          } catch (e) {
+            if (data.length > 0) {
+              setSelectedIds(data.slice(0, 3).map(p => p.id));
+            }
+          }
+        } else if (data.length > 0) {
           setSelectedIds(data.slice(0, 3).map(p => p.id));
         }
       }
@@ -192,12 +223,12 @@ export default function LitReviewPage() {
                   <p className="text-[10px] text-slate-500">Mapping lineages, shared trends, and methodology gaps</p>
                 </div>
               ) : review ? (
-                <div className="prose prose-invert max-w-none text-xs leading-relaxed text-slate-300 space-y-4 whitespace-pre-line bg-slate-900/15 p-6 rounded-2xl border border-slate-800/40">
+                <div className="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300 bg-slate-900/15 p-6 rounded-2xl border border-slate-800/40">
                   <div className="flex items-center gap-2 mb-4 text-white">
                     <Sparkles className="w-5 h-5 text-indigo-400" />
                     <h3 className="text-sm font-bold">Joint Literature Review Generated</h3>
                   </div>
-                  {review}
+                  <MarkdownRenderer content={review} />
                 </div>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-center p-8">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 import { 
   Send, 
   BookOpen, 
@@ -378,7 +379,7 @@ export default function ChatPage() {
                 const pap = papers.find(p => p.id === e.target.value);
                 if (pap) handleSelectPaper(pap);
               }}
-              className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 max-w-[280px]"
+              className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 w-full max-w-[650px]"
             >
               {papers.length === 0 && <option>No papers indexed</option>}
               {papers.map(p => (
@@ -430,9 +431,12 @@ export default function ChatPage() {
                     <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
                   </div>
                 ) : (
-                  <div className="prose prose-invert max-w-none text-xs leading-relaxed text-slate-300 whitespace-pre-line">
-                    <h3 className="text-sm font-bold text-white mb-3">{activeSection}</h3>
-                    {sections[activeSection]}
+                  <div className="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300 bg-slate-900/15 p-5 rounded-2xl border border-slate-800/40">
+                    <h3 className="text-base font-bold text-white border-b border-slate-800/60 pb-2 mb-4 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-indigo-400" />
+                      {activeSection}
+                    </h3>
+                    <MarkdownRenderer content={sections[activeSection]} />
                   </div>
                 )}
               </div>
@@ -455,7 +459,7 @@ export default function ChatPage() {
                     }`}
                   >
                     <div
-                      className={`p-4 rounded-2xl text-xs leading-relaxed ${
+                      className={`p-4 rounded-2xl text-sm leading-relaxed ${
                         msg.role === "user"
                           ? "bg-indigo-600 text-white rounded-br-none"
                           : "bg-slate-900/80 border border-slate-800/80 text-slate-200 rounded-bl-none"

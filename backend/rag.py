@@ -83,6 +83,8 @@ class RAGEngine:
         self.chunks = []
         self.embeddings = None
         self.faiss_index = None
+        self.metadata = {}
+        self.page_count = 0
 
     def _get_local_model(self):
         if self.local_model is None:
@@ -95,6 +97,9 @@ class RAGEngine:
         """
         Chunks the document sections into small texts, keeping track of page numbers and section names.
         """
+        self.metadata = parsed_data.get("metadata", {})
+        self.page_count = parsed_data.get("page_count", len(parsed_data.get("pages", [])))
+        
         text_splitter = SimpleRecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
@@ -256,7 +261,18 @@ class RAGEngine:
             context_str += f"[Chunk {i+1} | Page {chunk['page_num']} | Section: {chunk['section']}]\n"
             context_str += f"{chunk['text']}\n\n"
             
-        prompt = f"""You are an AI Research Paper Assistant. Answer the user's question about the research paper using the context below.
+        metadata_str = f"Title: {self.metadata.get('title', 'Unknown')}\n"
+        metadata_str += f"Authors: {self.metadata.get('authors', 'Unknown')}\n"
+        metadata_str += f"Total Pages: {self.page_count}\n"
+        if self.metadata.get('abstract'):
+            metadata_str += f"Abstract: {self.metadata.get('abstract')}\n"
+
+        prompt = f"""You are an AI Research Paper Assistant. Answer the user's question about the research paper using the context and paper metadata below.
+
+Paper Metadata:
+---------------------
+{metadata_str}
+---------------------
 
 Context:
 ---------------------
@@ -266,9 +282,10 @@ Context:
 Question: {query}
 
 Instructions:
-1. Provide a comprehensive, accurate, and detailed answer using ONLY the retrieved context.
-2. You MUST include inline citations whenever you reference specific information (e.g. "[Page 3, Section: Methodology]").
+1. Provide a comprehensive, accurate, and detailed answer using the retrieved context and/or the paper metadata.
+2. You MUST include inline citations whenever you reference specific information from the context (e.g. "[Page 3, Section: Methodology]").
 3. Citing the page number and section from the source chunk metadata is critical.
-4. If the context does not contain the answer, say "I cannot find the answer in the paper." and list what relevant concepts were found instead.
+4. If you use information from the Paper Metadata (e.g. total pages, authors, title), state that it comes from the paper metadata.
+5. If the context and metadata do not contain the answer, say "I cannot find the answer in the paper." and list what relevant concepts were found instead.
 """
         return prompt

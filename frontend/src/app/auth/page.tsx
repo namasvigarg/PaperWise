@@ -12,7 +12,8 @@ import {
   CheckCircle,
   User,
   School,
-  Briefcase
+  Briefcase,
+  Globe
 } from "lucide-react";
 
 export default function AuthPage() {
@@ -25,6 +26,7 @@ export default function AuthPage() {
   const [name, setName] = useState<string>("");
   const [institution, setInstitution] = useState<string>("");
   const [role, setRole] = useState<string>("Researcher");
+  const [country, setCountry] = useState<string>("");
   
   // Status states
   const [loading, setLoading] = useState<boolean>(false);
@@ -91,7 +93,8 @@ export default function AuthPage() {
             data: {
               name,
               institution,
-              role
+              role,
+              country
             }
           }
         });
@@ -273,6 +276,22 @@ export default function AuthPage() {
                       <option value="Other">Other</option>
                     </select>
                     <Briefcase className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
+                  </div>
+                </div>
+
+                {/* Country field */}
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-2">Country</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="United States"
+                      value={country}
+                      onChange={(e) => setCountry(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-10 pr-4 py-3 text-xs text-slate-200 placeholder-slate-650 focus:outline-none focus:border-indigo-500 transition-all"
+                      required
+                    />
+                    <Globe className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
                   </div>
                 </div>
               </>

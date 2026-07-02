@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabaseClient";
-import { 
-  LayoutDashboard, 
-  MessageSquare, 
-  Columns, 
-  Library, 
+import {
+  LayoutDashboard,
+  MessageSquare,
+  Columns,
+  Library,
   Sparkles,
   BookOpen,
   LogOut,
@@ -51,20 +51,18 @@ export default function Sidebar() {
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
-            
+
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-200 group ${
-                  isActive
+                className={`flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
                     ? "bg-gradient-to-r from-indigo-600/90 to-purple-600/90 text-white font-medium shadow-md shadow-indigo-600/10"
                     : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
-                }`}
+                  }`}
               >
-                <Icon className={`w-5 h-5 transition-transform duration-200 group-hover:scale-105 ${
-                  isActive ? "text-white" : "text-slate-400 group-hover:text-indigo-400"
-                }`} />
+                <Icon className={`w-5 h-5 transition-transform duration-200 group-hover:scale-105 ${isActive ? "text-white" : "text-slate-400 group-hover:text-indigo-400"
+                  }`} />
                 <span className="text-[14px]">{item.name}</span>
               </Link>
             );

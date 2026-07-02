@@ -18,7 +18,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         const { data: { session } } = await supabase.auth.getSession();
         const hasSession = !!session;
         setAuthenticated(hasSession);
-        
+
         handleRedirect(hasSession, pathname);
       } catch (e) {
         console.error("Auth check error:", e);
@@ -44,7 +44,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   const handleRedirect = (isAuth: boolean, currentPath: string) => {
     const isAuthPage = currentPath === "/auth";
-    
+
     if (!isAuth && !isAuthPage) {
       // Redirect to login if not authenticated and trying to access app pages
       router.push("/auth");
@@ -60,7 +60,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-[#0B0F19] flex flex-col items-center justify-center gap-4 relative overflow-hidden">
         <div className="absolute top-[20%] left-[20%] w-[40%] h-[40%] bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute bottom-[20%] right-[20%] w-[40%] h-[40%] bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
-        
+
         <div className="bg-slate-900/40 border border-slate-850 p-6 rounded-3xl flex flex-col items-center gap-4.5 text-center shadow-2xl relative z-10">
           <div className="bg-gradient-to-tr from-indigo-500 to-purple-600 p-3 rounded-2xl animate-pulse">
             <Sparkles className="w-6 h-6 text-white" />

@@ -9,6 +9,7 @@ import {
   HelpCircle,
   AlertCircle
 } from "lucide-react";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -32,7 +33,25 @@ export default function ComparePage() {
 
   useEffect(() => {
     fetchPapers();
+    const savedComparison = sessionStorage.getItem("compare_result");
+    if (savedComparison) setComparison(savedComparison);
   }, []);
+
+  useEffect(() => {
+    if (paperA) sessionStorage.setItem("compare_paper_a", paperA);
+  }, [paperA]);
+
+  useEffect(() => {
+    if (paperB) sessionStorage.setItem("compare_paper_b", paperB);
+  }, [paperB]);
+
+  useEffect(() => {
+    if (comparison) {
+      sessionStorage.setItem("compare_result", comparison);
+    } else {
+      sessionStorage.removeItem("compare_result");
+    }
+  }, [comparison]);
 
   const fetchPapers = async () => {
     try {
@@ -40,12 +59,16 @@ export default function ComparePage() {
       if (res.ok) {
         const data = await res.json();
         setPapers(data);
+        
+        const savedPaperA = sessionStorage.getItem("compare_paper_a");
+        const savedPaperB = sessionStorage.getItem("compare_paper_b");
+
         if (data.length > 1) {
-          setPaperA(data[0].id);
-          setPaperB(data[1].id);
+          setPaperA(savedPaperA && data.some((p: Paper) => p.id === savedPaperA) ? savedPaperA : data[0].id);
+          setPaperB(savedPaperB && data.some((p: Paper) => p.id === savedPaperB) ? savedPaperB : data[1].id);
         } else if (data.length > 0) {
-          setPaperA(data[0].id);
-          setPaperB(data[0].id);
+          setPaperA(savedPaperA && data.some((p: Paper) => p.id === savedPaperA) ? savedPaperA : data[0].id);
+          setPaperB(savedPaperB && data.some((p: Paper) => p.id === savedPaperB) ? savedPaperB : data[0].id);
         }
       }
     } catch (e) {
@@ -165,12 +188,12 @@ export default function ComparePage() {
               <p className="text-[10px] text-slate-500">Parsing methodologies, abstracts, and benchmarking metrics</p>
             </div>
           ) : comparison ? (
-            <div className="prose prose-invert max-w-none text-xs leading-relaxed text-slate-300 space-y-4 whitespace-pre-line bg-slate-900/15 p-6 rounded-2xl border border-slate-800/40">
+            <div className="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300 bg-slate-900/15 p-6 rounded-2xl border border-slate-800/40">
               <div className="flex items-center gap-2 mb-4 text-white">
                 <Sparkles className="w-5 h-5 text-indigo-400" />
                 <h3 className="text-sm font-bold">Comparative Report Generated</h3>
               </div>
-              {comparison}
+              <MarkdownRenderer content={comparison} />
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-center p-8">

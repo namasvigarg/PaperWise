@@ -11,12 +11,12 @@ class AcademicPDFParser:
         self.sections = {}
         self.references_raw = []
 
-    def parse(self):
+    def parse(self, llm_bridge=None):
         """
         Main parsing method: extracts text, metadata, sections, and references.
         """
         self.extract_pages()
-        self.extract_metadata_heuristics()
+        self.extract_metadata_heuristics(llm_bridge=llm_bridge)
         self.extract_sections()
         self.extract_references()
         return {
@@ -53,36 +53,150 @@ class AcademicPDFParser:
                 "text": page_text
             })
 
-    def extract_metadata_heuristics(self):
+    def extract_metadata_heuristics(self, llm_bridge=None):
         """
         Extracts Title, Authors, and Abstract from the first pages using text patterns.
         """
         first_page_text = self.pages[0]["text"] if self.pages else ""
         
-        # Simple heuristics for abstract
+        # 1. Try LLM extraction if bridge is available
+        if llm_bridge:
+            try:
+                import json
+                llm_prompt = f"""You are an expert academic metadata extractor. Given the plain text of the first page of a research paper, extract:
+1. Title: The exact title of the research paper (not the journal name, volume, or "Research paper" label).
+2. Authors: Comma-separated list of author names (exclude affiliations, departments, or emails).
+3. Abstract: The abstract text.
+
+Format your response as a valid JSON object with keys "title", "authors", and "abstract". 
+Provide ONLY the JSON block. Do not include any explanation or markdown formatting outside the JSON block.
+
+First Page Text:
+{first_page_text[:4000]}
+"""
+                res_str = llm_bridge(llm_prompt)
+                clean_json = res_str.strip()
+                if clean_json.startswith("```"):
+                    clean_json = re.sub(r'^```(?:json)?\n', '', clean_json)
+                    clean_json = re.sub(r'\n```$', '', clean_json)
+                metadata = json.loads(clean_json)
+                if metadata.get("title") and metadata.get("authors"):
+                    self.metadata = {
+                        "title": metadata.get("title").strip(),
+                        "authors": metadata.get("authors").strip(),
+                        "abstract": metadata.get("abstract", "No abstract found.").strip()
+                    }
+                    return
+            except Exception as e:
+                print(f"LLM metadata extraction failed, falling back to font-size heuristics. Error: {e}")
+
+        # 2. Fallback: Font-size based heuristics
+        try:
+            page = self.doc[0]
+            blocks = page.get_text("dict")["blocks"]
+            spans = []
+            for b in blocks:
+                if "lines" in b:
+                    for l in b["lines"]:
+                        for s in l["spans"]:
+                            spans.append(s)
+            
+            if spans:
+                noise_patterns = [
+                    r'^research\s+paper', r'^research\s+article', r'^article', r'^review',
+                    r'^journal\s+of', r'^arxiv:', r'^proceedings', r'^volume', r'^issn', r'^http',
+                    r'^doi:', r'^www\.', r'^copyright', r'\b20\d{2}\b'
+                ]
+                filtered_spans = []
+                for s in spans:
+                    text_clean = s["text"].strip().lower()
+                    if not text_clean:
+                        continue
+                    is_noise = False
+                    for pattern in noise_patterns:
+                        if re.search(pattern, text_clean):
+                            if len(text_clean) < 50:
+                                is_noise = True
+                                break
+                    if not is_noise:
+                        filtered_spans.append(s)
+                
+                if not filtered_spans:
+                    filtered_spans = spans
+                
+                max_size = max(s["size"] for s in filtered_spans)
+                title_spans = [s for s in filtered_spans if s["size"] >= max_size - 1.0]
+                title_spans.sort(key=lambda s: (s["bbox"][1], s["bbox"][0]))
+                title = " ".join(s["text"].strip() for s in title_spans)
+                title = re.sub(r'\s+', ' ', title).strip()
+                
+                abstract_idx = -1
+                for idx, s in enumerate(spans):
+                    if "abstract" in s["text"].strip().lower() and s["size"] < max_size:
+                        abstract_idx = idx
+                        break
+                
+                authors_text = ""
+                if abstract_idx != -1:
+                    last_title_idx = -1
+                    for s_t in title_spans:
+                        try:
+                            idx = spans.index(s_t)
+                            if idx > last_title_idx:
+                                last_title_idx = idx
+                        except ValueError:
+                            pass
+                    
+                    if last_title_idx != -1 and last_title_idx < abstract_idx:
+                        author_spans = spans[last_title_idx + 1: abstract_idx]
+                        author_candidates = []
+                        for s in author_spans:
+                            txt = s["text"].strip()
+                            if txt and not txt.startswith("___") and "@" not in txt and "email" not in txt.lower():
+                                author_candidates.append(txt)
+                        authors_text = ", ".join(author_candidates)
+                
+                if authors_text:
+                    authors_text = re.sub(r'\s+', ' ', authors_text).strip()
+                else:
+                    authors_text = "Unknown Authors"
+                    
+                abstract = ""
+                abstract_match = re.search(r'(?i)abstract[\s\.:\n]+(.*?)(?=\n\s*(?:1\.?\s+)?(?:introduction|intro|keywords|categories)\b)', first_page_text, re.DOTALL)
+                if abstract_match:
+                    abstract = abstract_match.group(1).strip()
+                else:
+                    abstract_match = re.search(r'(?i)abstract[\s\.:\n]+(.*)', first_page_text, re.DOTALL)
+                    if abstract_match:
+                        abstract = abstract_match.group(1)[:1500].strip()
+                    
+                self.metadata = {
+                    "title": title or "Unknown Title",
+                    "authors": authors_text,
+                    "abstract": self.clean_text_formatting(abstract) if abstract else "No abstract found."
+                }
+                return
+        except Exception as e:
+            print(f"Font-size heuristics failed, falling back to simple text heuristics. Error: {e}")
+
+        # 3. Final Fallback: Simple text-based heuristics (original code)
         abstract = ""
         abstract_match = re.search(r'(?i)abstract[\s\.:\n]+(.*?)(?=\n\s*(?:1\.?\s+)?(?:introduction|intro|keywords|categories)\b)', first_page_text, re.DOTALL)
         if abstract_match:
             abstract = abstract_match.group(1).strip()
         else:
-            # Fallback abstract parsing
             abstract_match = re.search(r'(?i)abstract[\s\.:\n]+(.*)', first_page_text, re.DOTALL)
             if abstract_match:
                 abstract = abstract_match.group(1)[:1500].strip()
 
-        # Simple heuristics for Title
-        # Title is usually the very first lines before author details
         lines = [line.strip() for line in first_page_text.split('\n') if line.strip()]
         title = lines[0] if lines else "Unknown Title"
         if len(title) < 10 and len(lines) > 1:
             title += " " + lines[1]
         
-        # Clean title from common headers
         if title.lower().startswith("arxiv:") or "journal of" in title.lower():
             title = lines[1] if len(lines) > 1 else title
 
-        # Simple heuristics for authors
-        # Authors usually follow title and precede abstract
         authors = "Unknown Authors"
         if len(lines) > 1:
             author_lines = []
@@ -155,12 +269,19 @@ class AcademicPDFParser:
         """
         Segments the document text into logical sections based on section headers.
         """
-        # Common section heading patterns:
-        # 1. Introduction, 2. Related Work, etc. Or Roman Numerals: I. Introduction, II. Background
-        # Or just bold capital headers on their own line
-        heading_regex = re.compile(
-            r'^(?:(?:[IVXLCDM]+\.?\s+)|(?:\d+(?:\.\d+)*\.?\s+))?([A-Z][A-Za-z0-9\s]{2,40})$'
+        # Regex for numbered headings (e.g., 1. Introduction, 1.2 Section, I. Preface, A. Appendix)
+        numbered_heading_regex = re.compile(
+            r'^(?:[IVXLCDM]+\.?\s+|\d+(?:\.\d+)*\.?\s+)([A-Z][A-Za-z0-9\s,\.]{1,80})$'
         )
+        
+        # Common unnumbered academic section names
+        UNNUMBERED_HEADINGS = {
+            "abstract", "introduction", "related work", "literature review", 
+            "methodology", "methods", "experiments", "experimental design", 
+            "experimental setup", "results", "discussion", "conclusion", 
+            "conclusions", "references", "bibliography", "acknowledgements",
+            "appendix", "findings", "discussion and conclusions"
+        }
         
         current_section = "Title Page / Metadata"
         self.sections = {current_section: ""}
@@ -172,16 +293,23 @@ class AcademicPDFParser:
                 if not line_strip:
                     continue
                 
-                # Check if this line looks like a header
                 is_header = False
-                # If uppercase and relatively short
-                if line_strip.isupper() and len(line_strip) < 60:
-                    is_header = True
-                elif heading_regex.match(line_strip):
-                    is_header = True
                 
-                # Exclude lines that are equations or numbers or part of tables
-                if is_header and not re.match(r'^(?:Eq|Table|Fig|Figure|Algorithm)\b', line_strip, re.IGNORECASE):
+                # 1. Check if numbered heading
+                if numbered_heading_regex.match(line_strip):
+                    is_header = True
+                # 2. Check if it matches unnumbered standard headings (case-insensitive)
+                elif line_strip.lower() in UNNUMBERED_HEADINGS:
+                    is_header = True
+                # 3. Check if it is fully uppercase (e.g. "PROPOSED SYSTEM"), not starting with common noise
+                elif line_strip.isupper() and len(line_strip) >= 4 and len(line_strip) < 60:
+                    # Ignore table/figure captions or equations
+                    if not re.match(r'^(?:Eq|Table|Fig|Figure|Algorithm)\b', line_strip, re.IGNORECASE):
+                        # Ignore abbreviations with periods like B.A. or M.A.
+                        if not re.match(r'^[A-Z]\.(?:[A-Z]\.)+$', line_strip):
+                            is_header = True
+                
+                if is_header:
                     current_section = line_strip
                     if current_section not in self.sections:
                         self.sections[current_section] = ""
