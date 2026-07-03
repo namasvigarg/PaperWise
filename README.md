@@ -1,60 +1,57 @@
-# PaperWise 📚🔬
+# PaperWise
 
-PaperWise is an AI-powered academic research assistant and literature synthesis tool. Built with a FastAPI backend and a Next.js frontend, it helps researchers, students, and academics upload PDF research papers (or pull them straight from arXiv) to instantly parse metadata, detect research gaps, compare papers side-by-side, generate literature reviews, and perform semantic search/chat via Retrieval-Augmented Generation (RAG).
+PaperWise is an AI-powered research assistant for reading, understanding, and comparing academic papers. Upload a PDF (or pull one straight from arXiv) and get instant summaries, an interactive Q&A chat grounded in the paper's own content, side-by-side paper comparisons, literature review generation, concept explanations, and related-paper recommendations.
 
 **Live demo:** [paperwise-psi.vercel.app](https://paperwise-psi.vercel.app)
 
----
+## Features
 
-## 🌟 Key Features
+- **PDF Upload & Parsing** — Extracts structured content (sections, references, metadata) from academic PDFs.
+- **AI Summarization** — Generates concise summaries of uploaded papers.
+- **Chat with a Paper** — Ask natural-language questions about a paper and get answers grounded in its content via a Retrieval-Augmented Generation (RAG) pipeline.
+- **Paper Comparison** — Compare two papers side by side.
+- **Literature Review Generation** — Synthesize a literature review across multiple uploaded papers.
+- **Research Gap Detection** — Surface potential gaps or open questions in a paper's research.
+- **Concept Explanation** — Get plain-language explanations of specific concepts/terms found in a paper.
+- **Related Paper Recommendations** — Finds similar papers via the arXiv API.
+- **User Accounts & Persistence** — Auth and paper storage backed by Supabase.
+- **Flexible LLM Backend** — Uses Gemini or OpenAI when an API key is configured, and falls back to local SentenceTransformers-based embeddings/rule-based summarization when no key is provided.
 
-* **PDF Upload & Parsing:** Extracts structured content (sections, references, metadata, titles, authors) from academic PDFs.
-* **Semantic RAG Chat:** Ask questions and chat directly with uploaded research papers using context-aware vector retrieval.
-* **Side-by-Side Comparison:** Compare two papers side-by-side, analyzing their methodologies, contributions, and gaps.
-* **Literature Review Generation:** Synthesizes multiple papers simultaneously into structured surveys, mapping methodology trends, research divergences, and lineage.
-* **Research Gap Detection:** Surface potential gaps or open questions in a paper's research.
-* **Concept Explanation:** Get plain-language explanations of specific concepts/terms found in a paper.
-* **Related Paper Recommendations:** Finds similar papers via the arXiv API.
-* **Supabase Cloud Sync:** Securely syncs papers and user profiles to a Supabase database with seamless local disk fallbacks.
-* **Gemini API Key Rotation:** Features an automatic key rotation failover system using secondary Gemini keys to prevent rate limits (`429` quota errors).
-* **Local Embedding Fallback:** Falls back to running SentenceTransformers locally if API services are unavailable or local embeddings are preferred.
+## Tech Stack
 
----
+**Frontend**
+- [Next.js](https://nextjs.org) 16 (App Router) + React 19 + TypeScript
+- Tailwind CSS 4
+- Supabase JS client (auth & data)
+- Lucide icons
 
-## 🛠️ Tech Stack
+**Backend**
+- [FastAPI](https://fastapi.tiangolo.com) (Python)
+- PyMuPDF for PDF parsing
+- LangChain + Sentence-Transformers for embeddings / RAG
+- OpenAI SDK (compatible with OpenAI and Gemini endpoints)
+- Supabase (REST) for persistence
 
-### Frontend
-* **Framework:** [Next.js](https://nextjs.org) 16 (App Router) + React 19 + TypeScript
-* **Styling:** Tailwind CSS (Modern Dark Mode, glassmorphism UI)
-* **Database/Auth:** Supabase JS client
-* **Icons:** Lucide React
+**Infra**
+- Docker & Docker Compose for local orchestration
+- Deployed on Vercel (frontend)
 
-### Backend
-* **API Framework:** [FastAPI](https://fastapi.tiangolo.com) (Python)
-* **Vector Store:** FAISS (Facebook AI Similarity Search) or LangChain-based local indexing
-* **Embeddings:** Gemini API (`models/gemini-embedding-001`) or Local `all-MiniLM-L6-v2` (via SentenceTransformers)
-* **LLM Engine:** Gemini API (`gemini-2.5-flash` via OpenAI-compatible endpoints)
-* **PDF Parsing:** PyMuPDF / robust academic PDF parser
-* **Database Client:** Supabase REST Client
-
----
-
-## 📂 Project Structure
+## Project Structure
 
 ```
 PaperWise/
 ├── backend/
 │   ├── main.py            # FastAPI app & API routes
 │   ├── parser.py          # Academic PDF parsing
-│   ├── rag.py             # RAG engine (embeddings, retrieval, chat)
-│   ├── arxiv_service.py   # arXiv search/recommendation integration
-│   ├── supabase_db.py     # Supabase persistence layer
+│   ├── rag.py              # RAG engine (embeddings, retrieval, chat)
+│   ├── arxiv_service.py    # arXiv search/recommendation integration
+│   ├── supabase_db.py      # Supabase persistence layer
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── app/           # Next.js routes (auth, chat, compare, lit-review, profile, ...)
-│   │   ├── components/    # Shared UI components
+│   │   ├── app/            # Next.js routes (auth, chat, compare, lit-review, profile, ...)
+│   │   ├── components/     # Shared UI components
 │   │   └── utils/
 │   ├── package.json
 │   └── Dockerfile
@@ -62,14 +59,15 @@ PaperWise/
 └── .env.example
 ```
 
----
-
-## 🚀 Setup & Installation
+## Getting Started
 
 ### Prerequisites
-* **Python** 3.10+
-* **Node.js** 18+ & npm/yarn/pnpm
-* (Optional) **Docker & Docker Compose**
+
+- Node.js 18+ and npm
+- Python 3.10+
+- (Optional) Docker & Docker Compose
+- (Optional) An OpenAI or Gemini API key — the app runs locally without one, using local models
+- (Optional) A Supabase project — for auth and persistent storage
 
 ### 1. Clone the repository
 
@@ -78,121 +76,66 @@ git clone https://github.com/namasvigarg/PaperWise.git
 cd PaperWise
 ```
 
-### 2. Configure Environment Variables
+### 2. Configure environment variables
 
-Create the required environment files. You can copy the example configuration:
+Copy the example env file and fill in any keys you want to use:
 
 ```bash
-# In the repository root
 cp .env.example .env
 ```
 
-#### Backend Environment Variables (`backend/.env`)
-Create a `.env` file inside the `backend/` directory:
 ```env
-# LLM Configurations (Optional: local mock fallbacks are used if not provided)
-GEMINI_API_KEY=your_primary_gemini_key_here
-GEMINI_API_KEY_SECONDARY=your_secondary_gemini_key_here
+# Optional: If not provided, the app falls back to local SentenceTransformers
+# and rule-based local models for summarization/chat completions.
+OPENAI_API_KEY=your_openai_api_key_here
 
-# Server Settings
+# Backend service configuration
+BACKEND_URL=http://localhost:8000
 PORT=8000
 HOST=127.0.0.1
-USE_LOCAL_EMBEDDINGS=true  # Set to false to use Gemini API embeddings
 
-# Supabase Configuration
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_service_role_key_here
+# Optional: Supabase (for auth & persistence)
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_KEY=your_supabase_service_or_anon_key
+
+# Optional: Gemini (used instead of OpenAI if set)
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
-#### Frontend Environment Variables (`frontend/.env`)
-Create a `.env` file inside the `frontend/` directory:
-```env
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
-```
-
----
-
-### 3. Run with Docker Compose (Recommended)
-
-To spin up the entire stack (Frontend, Backend, and local configurations) at once:
+### 3. Run with Docker Compose (recommended)
 
 ```bash
 docker-compose up --build
 ```
-* **Backend:** `http://localhost:8000`
-* **Frontend:** `http://localhost:3000`
 
----
+- Backend available at `http://localhost:8000`
+- Frontend available at `http://localhost:3000`
 
-### 4. Run Manually (Without Docker)
+### 4. Run manually (without Docker)
 
-#### Backend Setup:
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   # On Windows (PowerShell)
-   .\venv\Scripts\Activate.ps1
-   # On macOS/Linux
-   source venv/bin/activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Run the server:
-   ```bash
-   python main.py
-   # or
-   uvicorn main:app --reload --port 8000
-   ```
+**Backend:**
 
-#### Frontend Setup:
-1. Navigate to the frontend directory:
-   ```bash
-   cd ../frontend
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-   Open `http://localhost:3000` in your browser.
-
----
-
-## 🗄️ Database Setup (Supabase)
-
-To enable database synchronization and user authentication, set up a Supabase project and execute the following SQL schema in your Supabase **SQL Editor** to create the `papers` table:
-
-```sql
--- Create the papers table
-CREATE TABLE papers (
-    id TEXT PRIMARY KEY,
-    raw_data JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
--- Enable Row Level Security (RLS) if required
-ALTER TABLE papers ENABLE ROW LEVEL SECURITY;
-
--- Allow public read access (or restrict to authenticated users)
-CREATE POLICY "Allow public read access" ON papers FOR SELECT USING (true);
-CREATE POLICY "Allow service role inserts" ON papers FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow service role deletes" ON papers FOR DELETE USING (true);
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate   # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
 ```
 
----
+**Frontend:**
 
-## 🌐 API Overview
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Set `NEXT_PUBLIC_API_URL=http://localhost:8000` in the frontend environment so it can reach the backend.
+
+Then open [http://localhost:3000](http://localhost:3000).
+
+## API Overview
 
 The FastAPI backend exposes the following endpoints:
 
@@ -210,38 +153,17 @@ The FastAPI backend exposes the following endpoints:
 | `POST` | `/api/literature-review` | Generate a literature review across papers |
 | `POST` | `/api/explain-concept` | Explain a specific concept from a paper |
 
----
+## Deployment
 
-## 🌐 Production Deployment
+- **Frontend:** Deployable to [Vercel](https://vercel.com) out of the box (Next.js).
+- **Backend:** Deployable via the included `Dockerfile`/`docker-compose.yml` to any container host (Render, Railway, Fly.io, a VPS, etc.).
 
-### Backend (Deployed on Render)
-1. Set up a Web Service on Render.
-2. Link your GitHub repository.
-3. Configure the following environment variables:
-   * `GEMINI_API_KEY`
-   * `GEMINI_API_KEY_SECONDARY`
-   * `SUPABASE_URL`
-   * `SUPABASE_KEY`
-   * `USE_LOCAL_EMBEDDINGS` = `false` *(Recommended for Render Free tier to avoid memory crashes)*
-4. Set the **Build Command** to: `pip install -r requirements.txt`
-5. Set the **Start Command** to: `python main.py`
+Make sure `NEXT_PUBLIC_API_URL` on the frontend points to your deployed backend URL, and that CORS on the backend is restricted to your production frontend origin before going live.
 
-### Frontend (Deployed on Vercel)
-1. Set up a new project on Vercel linked to your repository.
-2. Configure the environment variables:
-   * `NEXT_PUBLIC_API_URL` = `https://your-backend-name.onrender.com`
-   * `NEXT_PUBLIC_SUPABASE_URL` = `https://your-project.supabase.co`
-   * `NEXT_PUBLIC_SUPABASE_ANON_KEY` = `your_supabase_anon_key`
-3. Click **Deploy**. *(Note: If you add environment variables later, you must trigger a redeployment on Vercel so they are baked in at build time)*
-
-Make sure CORS on the backend is restricted to your production frontend origin before going live.
-
----
-
-## 🤝 Contributing
+## Contributing
 
 Contributions, issues, and feature requests are welcome. Feel free to open a pull request or file an issue.
 
-## 📄 License
+## License
 
 No license has been specified for this project yet.
