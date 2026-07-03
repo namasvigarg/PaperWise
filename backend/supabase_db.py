@@ -34,7 +34,7 @@ def save_paper(paper_id: str, parsed_data: Dict[str, Any]) -> bool:
         headers = get_headers()
         # Instruct PostgREST to perform an upsert/merge-duplicates
         headers["Prefer"] = "resolution=merge-duplicates"
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=15)
         if response.status_code in [200, 201]:
             print(f"Paper {paper_id} successfully saved to Supabase.")
             return True
@@ -52,7 +52,7 @@ def get_paper(paper_id: str) -> Optional[Dict[str, Any]]:
         
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/papers?id=eq.{paper_id}&select=raw_data"
     try:
-        response = requests.get(url, headers=get_headers())
+        response = requests.get(url, headers=get_headers(), timeout=15)
         if response.status_code == 200:
             data = response.json()
             if data and len(data) > 0:
@@ -64,24 +64,25 @@ def get_paper(paper_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 def list_papers() -> Optional[List[Dict[str, Any]]]:
-    """Retrieves summaries of all papers registered in Supabase."""
+    """Retrieves summaries of all papers registered in Supabase without downloading full bodies."""
     if not is_configured():
         return None
         
-    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/papers?select=id,raw_data"
+    # Optimize query to fetch only the metadata, page count, and upload time rather than the massive full body JSON (raw_data)
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/papers?select=id,raw_data->metadata,raw_data->page_count,raw_data->upload_time"
     try:
-        response = requests.get(url, headers=get_headers())
+        response = requests.get(url, headers=get_headers(), timeout=15)
         if response.status_code == 200:
             results = []
             for item in response.json():
-                raw_data = item.get("raw_data", {})
+                metadata = item.get("metadata") or {}
                 results.append({
                     "id": item.get("id"),
-                    "title": raw_data.get("metadata", {}).get("title", "Unknown"),
-                    "authors": raw_data.get("metadata", {}).get("authors", "Unknown"),
-                    "abstract": raw_data.get("metadata", {}).get("abstract", "No abstract"),
-                    "page_count": raw_data.get("page_count", 0),
-                    "upload_time": raw_data.get("upload_time")
+                    "title": metadata.get("title", "Unknown"),
+                    "authors": metadata.get("authors", "Unknown"),
+                    "abstract": metadata.get("abstract", "No abstract"),
+                    "page_count": item.get("page_count", 0),
+                    "upload_time": item.get("upload_time")
                 })
             return results
         else:
@@ -97,7 +98,7 @@ def delete_paper(paper_id: str) -> bool:
         
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/papers?id=eq.{paper_id}"
     try:
-        response = requests.delete(url, headers=get_headers())
+        response = requests.delete(url, headers=get_headers(), timeout=15)
         if response.status_code in [200, 204]:
             print(f"Paper {paper_id} deleted from Supabase.")
             return True
