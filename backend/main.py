@@ -82,7 +82,7 @@ def get_openai_client(user_key: Optional[str] = None) -> Optional[openai.OpenAI]
 
 def call_llm(prompt: str, system_prompt: str = "You are a helpful AI research assistant.", user_key: Optional[str] = None) -> str:
     """
-    Utility helper to request completions from Gemini or OpenAI, with a mock fallback if no API key is set.
+    Utility helper to request completions from Gemini, Groq, or OpenAI, with a mock fallback.
     """
     # Gather Gemini API keys
     gemini_keys = []
@@ -94,6 +94,8 @@ def call_llm(prompt: str, system_prompt: str = "You are a helpful AI research as
         gemini_keys.append(secondary)
 
     # 1. Check if Gemini API is configured and attempt calls sequentially
+    gemini_failed = False
+    gemini_err_str = ""
     if gemini_keys:
         for idx, api_key in enumerate(gemini_keys):
             try:
@@ -113,21 +115,38 @@ def call_llm(prompt: str, system_prompt: str = "You are a helpful AI research as
             except Exception as e:
                 err_str = str(e)
                 print(f"Gemini API key {idx + 1} failed: {err_str}")
-                is_quota_issue = "429" in err_str or "quota" in err_str.lower() or "limit" in err_str.lower()
                 
-                # If this is the last key, handle the error/fallback
+                # If this is the last key, flag that Gemini has failed
                 if idx == len(gemini_keys) - 1:
-                    if is_quota_issue:
-                        fallback_res = mock_llm_fallback(prompt)
-                        return f"⚠️ **Notice: Gemini API quota exceeded (Rate Limit/429) for all keys. Falling back to local rule-based response:**\n\n{fallback_res}"
-                    return f"Error contacting Gemini API: {err_str}"
-                
-                # Otherwise, continue to next key
-                print(f"Retrying with the next Gemini API key...")
-        
-        return mock_llm_fallback(prompt)
+                    gemini_failed = True
+                    gemini_err_str = err_str
+                else:
+                    print("Retrying with the next Gemini API key...")
 
-    # 2. Check OpenAI API configurations
+    # 2. If Gemini failed (or was not set) and Groq is set, try Groq API
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if groq_api_key:
+        try:
+            print("Attempting to call Groq API...")
+            client = openai.OpenAI(
+                api_key=groq_api_key,
+                base_url="https://api.groq.com/openai/v1"
+            )
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            err_str = str(e)
+            print(f"Groq API call failed: {err_str}")
+            # We will continue to OpenAI fallback or local fallback below
+
+    # 3. Check OpenAI API configurations
     client = get_openai_client(user_key)
     if client:
         try:
@@ -145,9 +164,18 @@ def call_llm(prompt: str, system_prompt: str = "You are a helpful AI research as
             err_str = str(e)
             print(f"OpenAI API Error: {err_str}")
             return f"Error contacting OpenAI API: {err_str}"
-    
-    # 3. Fallback/Mock LLM implementation for demo purposes when no API key exists
+            
+    # 4. Fallback/Mock LLM implementation when all configured APIs fail or aren't set
+    if gemini_keys and gemini_failed:
+        # Check if it was a quota issue
+        is_quota_issue = "429" in gemini_err_str or "quota" in gemini_err_str.lower() or "limit" in gemini_err_str.lower()
+        if is_quota_issue:
+            fallback_res = mock_llm_fallback(prompt)
+            return f"⚠️ **Notice: Gemini API quota exceeded (Rate Limit/429) for all keys. Falling back to local rule-based response:**\n\n{fallback_res}"
+        return f"Error contacting Gemini API: {gemini_err_str}"
+
     return mock_llm_fallback(prompt)
+
 
 def mock_llm_fallback(prompt: str) -> str:
     """

@@ -6,16 +6,16 @@ PaperWise is an AI-powered research assistant for reading, understanding, and co
 
 ## Features
 
-- **PDF Upload & Parsing** — Extracts structured content (sections, references, metadata) from academic PDFs.
-- **AI Summarization** — Generates concise summaries of uploaded papers.
-- **Chat with a Paper** — Ask natural-language questions about a paper and get answers grounded in its content via a Retrieval-Augmented Generation (RAG) pipeline.
-- **Paper Comparison** — Compare two papers side by side.
-- **Literature Review Generation** — Synthesize a literature review across multiple uploaded papers.
-- **Research Gap Detection** — Surface potential gaps or open questions in a paper's research.
-- **Concept Explanation** — Get plain-language explanations of specific concepts/terms found in a paper.
-- **Related Paper Recommendations** — Finds similar papers via the arXiv API.
-- **User Accounts & Persistence** — Auth and paper storage backed by Supabase.
-- **Flexible LLM Backend** — Uses Gemini or OpenAI when an API key is configured, and falls back to local SentenceTransformers-based embeddings/rule-based summarization when no key is provided.
+* **PDF Upload & Parsing:** Extracts structured content (sections, references, metadata, titles, authors) from academic PDFs.
+* **Semantic RAG Chat:** Ask questions and chat directly with uploaded research papers using context-aware vector retrieval.
+* **Side-by-Side Comparison:** Compare two papers side-by-side, analyzing their methodologies, contributions, and gaps.
+* **Literature Review Generation:** Synthesizes multiple papers simultaneously into structured surveys, mapping methodology trends, research divergences, and lineage.
+* **Research Gap Detection:** Surface potential gaps or open questions in a paper's research.
+* **Concept Explanation:** Get plain-language explanations of specific concepts/terms found in a paper.
+* **Related Paper Recommendations:** Finds similar papers via the arXiv API.
+* **Supabase Cloud Sync:** Securely syncs papers and user profiles to a Supabase database with seamless local disk fallbacks.
+* **Gemini & Groq Fallback Chain:** Features an automatic key rotation failover system using secondary Gemini keys, falling back to Groq API (`llama-3.3-70b-versatile`) if all Gemini quotas are exceeded.
+* **Local Embedding Fallback:** Falls back to running SentenceTransformers locally if API services are unavailable or local embeddings are preferred.
 
 ## Tech Stack
 
@@ -85,9 +85,13 @@ cp .env.example .env
 ```
 
 ```env
-# Optional: If not provided, the app falls back to local SentenceTransformers
-# and rule-based local models for summarization/chat completions.
+# LLM API Configurations
+# Optional: If not provided, the application falls back to local SentenceTransformers
+# and high-quality rule-based local models for summarization/chat completions.
 OPENAI_API_KEY=your_openai_api_key_here
+GEMINI_API_KEY=your_primary_gemini_key_here
+GEMINI_API_KEY_SECONDARY=your_secondary_gemini_key_here
+GROQ_API_KEY=your_groq_api_key_here
 
 # Backend service configuration
 BACKEND_URL=http://localhost:8000
@@ -97,9 +101,6 @@ HOST=127.0.0.1
 # Optional: Supabase (for auth & persistence)
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_service_or_anon_key
-
-# Optional: Gemini (used instead of OpenAI if set)
-GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ### 3. Run with Docker Compose (recommended)
