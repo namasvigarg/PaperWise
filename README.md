@@ -163,7 +163,3 @@ Make sure `NEXT_PUBLIC_API_URL` on the frontend points to your deployed backend 
 ## Contributing
 
 Contributions, issues, and feature requests are welcome. Feel free to open a pull request or file an issue.
-
-## License
-
-No license has been specified for this project yet.
