@@ -271,22 +271,30 @@ def list_papers():
 
 
 def load_paper_data(paper_id: str) -> Dict[str, Any]:
-    # 1. Try to load from Supabase if configured
+    # 1. Try local disk cache first to avoid slow Supabase network round-trips
+    json_path = os.path.join(PAPERS_DIR, f"{paper_id}.json")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                paper_data = json.load(f)
+                if paper_data and "metadata" in paper_data:
+                    return paper_data
+        except Exception as e:
+            print(f"Error reading local paper JSON from cache: {e}")
+
+    # 2. Try to load from Supabase if configured
     if supabase_db.is_configured():
         paper_data = supabase_db.get_paper(paper_id)
         if paper_data:
             # Cache locally so other code/FAISS RAG index files can use it
-            json_path = os.path.join(PAPERS_DIR, f"{paper_id}.json")
-            if not os.path.exists(json_path):
-                try:
-                    with open(json_path, "w", encoding="utf-8") as fw:
-                        json.dump(paper_data, fw, ensure_ascii=False, indent=2)
-                except Exception as e:
-                    print(f"Error caching paper JSON locally: {e}")
+            try:
+                with open(json_path, "w", encoding="utf-8") as fw:
+                    json.dump(paper_data, fw, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"Error caching paper JSON locally: {e}")
             return paper_data
 
-    # 2. Fallback to local disk
-    json_path = os.path.join(PAPERS_DIR, f"{paper_id}.json")
+    # 3. Fallback to reading file if not found or configured in Supabase
     if not os.path.exists(json_path):
         raise FileNotFoundError("Paper not found")
         
@@ -649,8 +657,11 @@ def compare_papers(request: CompareRequest):
     Compares two papers side-by-side.
     """
     try:
-        p1 = load_paper_data(request.paper_id_1)
-        p2 = load_paper_data(request.paper_id_2)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            fut1 = executor.submit(load_paper_data, request.paper_id_1)
+            fut2 = executor.submit(load_paper_data, request.paper_id_2)
+            p1 = fut1.result()
+            p2 = fut2.result()
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="One or both papers not found.")
     except Exception as e:
@@ -792,15 +803,19 @@ def generate_literature_review(request: LitReviewRequest):
         except Exception as e:
             print(f"Error reading lit review cache: {e}")
 
-    papers_summary = []
-    for pid in request.paper_ids:
+    # Fetch paper data in parallel to significantly reduce network wait times
+    def load_single_paper_summary(pid: str) -> Optional[str]:
         try:
             data = load_paper_data(pid)
-            papers_summary.append(
-                f"Title: {data['metadata']['title']}\nAbstract: {data['metadata']['abstract']}\n"
-            )
+            return f"Title: {data['metadata']['title']}\nAbstract: {data['metadata']['abstract']}\n"
         except Exception as e:
             print(f"Error loading paper {pid} for lit review: {e}")
+            return None
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        results = list(executor.map(load_single_paper_summary, request.paper_ids))
+        
+    papers_summary = [r for r in results if r is not None]
                 
     if not papers_summary:
         raise HTTPException(status_code=400, detail="No valid papers found to review.")
