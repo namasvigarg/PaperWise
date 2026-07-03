@@ -14,16 +14,9 @@ import {
   Link as LinkIcon,
   HelpCircle
 } from "lucide-react";
+import { usePapers, Paper } from "@/context/PaperContext";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
-interface Paper {
-  id: string;
-  title: string;
-  authors: string;
-  abstract: string;
-  page_count: number;
-}
 
 interface Message {
   role: "user" | "assistant";
@@ -134,11 +127,12 @@ const consolidateSections = (rawSections: Record<string, string>, abstractText: 
 };
 
 export default function ChatPage() {
-  const [papers, setPapers] = useState<Paper[]>([]);
+  const { papers } = usePapers();
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
+  const [chatInitialized, setChatInitialized] = useState<boolean>(false);
   
   // Paper sections
-  const [sections, setSections] = useState<Dict<string>>({});
+  const [sections, setSections] = useState<Record<string, string>>({});
   const [activeSection, setActiveSection] = useState<string>("");
   const [sectionsLoading, setSectionsLoading] = useState<boolean>(false);
 
@@ -147,10 +141,6 @@ export default function ChatPage() {
   const [inputMessage, setInputMessage] = useState<string>("");
   const [chatLoading, setChatLoading] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetchPapers();
-  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -163,26 +153,18 @@ export default function ChatPage() {
     }
   }, [messages]);
 
-  const fetchPapers = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/papers`);
-      if (res.ok) {
-        const data = await res.json();
-        setPapers(data);
-        if (data.length > 0) {
-          const savedPaperId = sessionStorage.getItem("chat_selected_paper_id");
-          const savedPaper = data.find((p: Paper) => p.id === savedPaperId);
-          if (savedPaper) {
-            handleSelectPaper(savedPaper, true);
-          } else {
-            handleSelectPaper(data[0], false);
-          }
-        }
+  useEffect(() => {
+    if (papers.length > 0 && !chatInitialized) {
+      const savedPaperId = sessionStorage.getItem("chat_selected_paper_id");
+      const savedPaper = papers.find((p: Paper) => p.id === savedPaperId);
+      if (savedPaper) {
+        handleSelectPaper(savedPaper, true);
+      } else {
+        handleSelectPaper(papers[0], false);
       }
-    } catch (e) {
-      console.error("Error fetching papers:", e);
+      setChatInitialized(true);
     }
-  };
+  }, [papers, chatInitialized]);
 
   const handleSelectPaper = async (paper: Paper, restore: boolean = false) => {
     setSelectedPaper(paper);

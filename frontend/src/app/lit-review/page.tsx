@@ -12,19 +12,14 @@ import {
   AlertTriangle
 } from "lucide-react";
 
+import { usePapers, Paper } from "@/context/PaperContext";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-interface Paper {
-  id: string;
-  title: string;
-  authors: string;
-  abstract: string;
-  page_count: number;
-}
-
 export default function LitReviewPage() {
-  const [papers, setPapers] = useState<Paper[]>([]);
+  const { papers } = usePapers();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIdsInitialized, setSelectedIdsInitialized] = useState<boolean>(false);
   
   // Results
   const [review, setReview] = useState<string>("");
@@ -32,7 +27,6 @@ export default function LitReviewPage() {
   const [errorMsg, setErrorMsg] = useState<string>("");
 
   useEffect(() => {
-    fetchPapers();
     const savedReview = sessionStorage.getItem("lit_review_result");
     if (savedReview) setReview(savedReview);
   }, []);
@@ -53,33 +47,24 @@ export default function LitReviewPage() {
     }
   }, [review]);
 
-  const fetchPapers = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/papers`);
-      if (res.ok) {
-        const data: Paper[] = await res.json();
-        setPapers(data);
-        
-        const savedSelectedIds = sessionStorage.getItem("lit_selected_ids");
-        if (savedSelectedIds) {
-          try {
-            const parsed = JSON.parse(savedSelectedIds);
-            // Filter to make sure they are still valid paper IDs
-            const valid = parsed.filter((id: string) => data.some(p => p.id === id));
-            setSelectedIds(valid);
-          } catch (e) {
-            if (data.length > 0) {
-              setSelectedIds(data.slice(0, 3).map(p => p.id));
-            }
-          }
-        } else if (data.length > 0) {
-          setSelectedIds(data.slice(0, 3).map(p => p.id));
+  useEffect(() => {
+    if (papers.length > 0 && !selectedIdsInitialized) {
+      const savedSelectedIds = sessionStorage.getItem("lit_selected_ids");
+      if (savedSelectedIds) {
+        try {
+          const parsed = JSON.parse(savedSelectedIds);
+          // Filter to make sure they are still valid paper IDs
+          const valid = parsed.filter((id: string) => papers.some(p => p.id === id));
+          setSelectedIds(valid);
+        } catch (e) {
+          setSelectedIds(papers.slice(0, 3).map(p => p.id));
         }
+      } else {
+        setSelectedIds(papers.slice(0, 3).map(p => p.id));
       }
-    } catch (e) {
-      console.error("Error fetching papers:", e);
+      setSelectedIdsInitialized(true);
     }
-  };
+  }, [papers, selectedIdsInitialized]);
 
   const handleToggleSelect = (paperId: string) => {
     setSelectedIds(prev => 

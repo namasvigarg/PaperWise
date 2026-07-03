@@ -20,19 +20,12 @@ import {
 } from "lucide-react";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
+import { usePapers, Paper } from "@/context/PaperContext";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-interface Paper {
-  id: string;
-  title: string;
-  authors: string;
-  abstract: string;
-  page_count: number;
-  upload_time?: string;
-}
-
 export default function Dashboard() {
-  const [papers, setPapers] = useState<Paper[]>([]);
+  const { papers, setPapers } = usePapers();
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [activeTab, setActiveTab] = useState<"summary" | "metadata" | "gaps">("summary");
 
@@ -54,25 +47,12 @@ export default function Dashboard() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch papers on load
+  // Auto select first paper once loaded
   useEffect(() => {
-    fetchPapers();
-  }, []);
-
-  const fetchPapers = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/papers`);
-      if (res.ok) {
-        const data = await res.json();
-        setPapers(data);
-        if (data.length > 0 && !selectedPaper) {
-          handleSelectPaper(data[0]);
-        }
-      }
-    } catch (e) {
-      console.error("Error fetching papers:", e);
+    if (papers.length > 0 && !selectedPaper) {
+      handleSelectPaper(papers[0]);
     }
-  };
+  }, [papers, selectedPaper]);
 
   const handleSelectPaper = (paper: Paper) => {
     setSelectedPaper(paper);

@@ -11,20 +11,15 @@ import {
 } from "lucide-react";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
+import { usePapers, Paper } from "@/context/PaperContext";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-interface Paper {
-  id: string;
-  title: string;
-  authors: string;
-  abstract: string;
-  page_count: number;
-}
-
 export default function ComparePage() {
-  const [papers, setPapers] = useState<Paper[]>([]);
+  const { papers } = usePapers();
   const [paperA, setPaperA] = useState<string>("");
   const [paperB, setPaperB] = useState<string>("");
+  const [compareInitialized, setCompareInitialized] = useState<boolean>(false);
   
   // Results
   const [comparison, setComparison] = useState<string>("");
@@ -32,7 +27,6 @@ export default function ComparePage() {
   const [errorMsg, setErrorMsg] = useState<string>("");
 
   useEffect(() => {
-    fetchPapers();
     const savedComparison = sessionStorage.getItem("compare_result");
     if (savedComparison) setComparison(savedComparison);
   }, []);
@@ -53,28 +47,21 @@ export default function ComparePage() {
     }
   }, [comparison]);
 
-  const fetchPapers = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/papers`);
-      if (res.ok) {
-        const data = await res.json();
-        setPapers(data);
-        
-        const savedPaperA = sessionStorage.getItem("compare_paper_a");
-        const savedPaperB = sessionStorage.getItem("compare_paper_b");
+  useEffect(() => {
+    if (papers.length > 0 && !compareInitialized) {
+      const savedPaperA = sessionStorage.getItem("compare_paper_a");
+      const savedPaperB = sessionStorage.getItem("compare_paper_b");
 
-        if (data.length > 1) {
-          setPaperA(savedPaperA && data.some((p: Paper) => p.id === savedPaperA) ? savedPaperA : data[0].id);
-          setPaperB(savedPaperB && data.some((p: Paper) => p.id === savedPaperB) ? savedPaperB : data[1].id);
-        } else if (data.length > 0) {
-          setPaperA(savedPaperA && data.some((p: Paper) => p.id === savedPaperA) ? savedPaperA : data[0].id);
-          setPaperB(savedPaperB && data.some((p: Paper) => p.id === savedPaperB) ? savedPaperB : data[0].id);
-        }
+      if (papers.length > 1) {
+        setPaperA(savedPaperA && papers.some((p: Paper) => p.id === savedPaperA) ? savedPaperA : papers[0].id);
+        setPaperB(savedPaperB && papers.some((p: Paper) => p.id === savedPaperB) ? savedPaperB : papers[1].id);
+      } else if (papers.length > 0) {
+        setPaperA(savedPaperA && papers.some((p: Paper) => p.id === savedPaperA) ? savedPaperA : papers[0].id);
+        setPaperB(savedPaperB && papers.some((p: Paper) => p.id === savedPaperB) ? savedPaperB : papers[0].id);
       }
-    } catch (e) {
-      console.error("Error fetching papers:", e);
+      setCompareInitialized(true);
     }
-  };
+  }, [papers, compareInitialized]);
 
   const handleCompare = async () => {
     if (!paperA || !paperB) {
