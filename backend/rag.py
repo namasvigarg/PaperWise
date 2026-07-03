@@ -56,9 +56,10 @@ class RAGEngine:
         self.local_model_name = "all-MiniLM-L6-v2"
         
         # If client is not passed but use_openai/key is provided, we can build it
-        if not self.client and (use_openai or openai_api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY")):
+        has_gemini_key = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY_SECONDARY") or os.getenv("GEMINI_API_KEY_2"))
+        if not self.client and (use_openai or openai_api_key or os.getenv("OPENAI_API_KEY") or has_gemini_key):
             # Build the client dynamically
-            gemini_api_key = os.getenv("GEMINI_API_KEY")
+            gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY_SECONDARY") or os.getenv("GEMINI_API_KEY_2")
             if gemini_api_key:
                 self.client = openai.OpenAI(
                     api_key=gemini_api_key,
@@ -72,11 +73,11 @@ class RAGEngine:
         # Check if we should use local embeddings to save API tokens
         use_local_env = os.getenv("USE_LOCAL_EMBEDDINGS", "").lower()
         # Default to local embeddings if explicitly set to true, or if using Gemini API key to prevent 429 errors
-        if use_local_env == "true" or (use_local_env == "" and os.getenv("GEMINI_API_KEY") is not None):
+        if use_local_env == "true" or (use_local_env == "" and has_gemini_key):
             self.client = None
 
         if self.client:
-            is_gemini = "generativelanguage.googleapis.com" in str(self.client.base_url) or bool(os.getenv("GEMINI_API_KEY"))
+            is_gemini = "generativelanguage.googleapis.com" in str(self.client.base_url) or has_gemini_key
             if is_gemini:
                 self.model_name = "models/gemini-embedding-001"
                 self.embedding_dim = 3072
@@ -159,19 +160,55 @@ class RAGEngine:
         texts = [c["text"] for c in self.chunks]
         
         if self.client:
-            try:
-                # Generate embeddings via API (OpenAI or Gemini)
-                response = self.client.embeddings.create(
-                    input=texts,
-                    model=self.model_name
-                )
-                self.embeddings = np.array([data.embedding for data in response.data], dtype=np.float32)
-            except Exception as e:
-                print(f"API embedding generation failed, falling back to local model. Error: {e}")
-                local_model = self._get_local_model()
-                self.embeddings = np.array(local_model.encode(texts), dtype=np.float32)
-                # Adjust dimensions to match local model dimension (384)
-                self.embedding_dim = 384
+            has_gemini_key = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY_SECONDARY") or os.getenv("GEMINI_API_KEY_2"))
+            is_gemini = "generativelanguage.googleapis.com" in str(self.client.base_url) or has_gemini_key
+            
+            if is_gemini:
+                # Gather Gemini API keys to try sequentially
+                gemini_keys = []
+                primary = os.getenv("GEMINI_API_KEY")
+                if primary:
+                    gemini_keys.append(primary)
+                secondary = os.getenv("GEMINI_API_KEY_SECONDARY") or os.getenv("GEMINI_API_KEY_2")
+                if secondary:
+                    gemini_keys.append(secondary)
+                
+                success = False
+                for idx, api_key in enumerate(gemini_keys):
+                    try:
+                        temp_client = openai.OpenAI(
+                            api_key=api_key,
+                            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+                        )
+                        response = temp_client.embeddings.create(
+                            input=texts,
+                            model=self.model_name
+                        )
+                        self.embeddings = np.array([data.embedding for data in response.data], dtype=np.float32)
+                        success = True
+                        break
+                    except Exception as e:
+                        print(f"Gemini API key {idx + 1} failed for embeddings: {e}")
+                
+                if not success:
+                    print("All Gemini API keys failed for embeddings, falling back to local model.")
+                    local_model = self._get_local_model()
+                    self.embeddings = np.array(local_model.encode(texts), dtype=np.float32)
+                    self.embedding_dim = 384
+            else:
+                try:
+                    # Generate embeddings via API (OpenAI)
+                    response = self.client.embeddings.create(
+                        input=texts,
+                        model=self.model_name
+                    )
+                    self.embeddings = np.array([data.embedding for data in response.data], dtype=np.float32)
+                except Exception as e:
+                    print(f"API embedding generation failed, falling back to local model. Error: {e}")
+                    local_model = self._get_local_model()
+                    self.embeddings = np.array(local_model.encode(texts), dtype=np.float32)
+                    # Adjust dimensions to match local model dimension (384)
+                    self.embedding_dim = 384
         else:
             # Generate local embeddings
             local_model = self._get_local_model()

@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from parser import AcademicPDFParser
 from rag import RAGEngine
 from arxiv_service import ArxivService
+import supabase_db
 
 # Load environment variables
 load_dotenv()
@@ -32,7 +33,7 @@ app.add_middleware(
 )
 
 # Directories for persistence
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+DATA_DIR = os.getenv("DATA_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
 PAPERS_DIR = os.path.join(DATA_DIR, "papers")
 
@@ -66,7 +67,7 @@ def get_openai_client(user_key: Optional[str] = None) -> Optional[openai.OpenAI]
     Returns an initialized client pointing to either Gemini or OpenAI endpoints.
     """
     # 1. Check if Gemini API is configured
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY_SECONDARY") or os.getenv("GEMINI_API_KEY_2")
     if gemini_api_key:
         return openai.OpenAI(
             api_key=gemini_api_key,
@@ -83,13 +84,54 @@ def call_llm(prompt: str, system_prompt: str = "You are a helpful AI research as
     """
     Utility helper to request completions from Gemini or OpenAI, with a mock fallback if no API key is set.
     """
+    # Gather Gemini API keys
+    gemini_keys = []
+    primary = os.getenv("GEMINI_API_KEY")
+    if primary:
+        gemini_keys.append(primary)
+    secondary = os.getenv("GEMINI_API_KEY_SECONDARY") or os.getenv("GEMINI_API_KEY_2")
+    if secondary:
+        gemini_keys.append(secondary)
+
+    # 1. Check if Gemini API is configured and attempt calls sequentially
+    if gemini_keys:
+        for idx, api_key in enumerate(gemini_keys):
+            try:
+                client = openai.OpenAI(
+                    api_key=api_key,
+                    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+                )
+                response = client.chat.completions.create(
+                    model="gemini-2.5-flash",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                err_str = str(e)
+                print(f"Gemini API key {idx + 1} failed: {err_str}")
+                is_quota_issue = "429" in err_str or "quota" in err_str.lower() or "limit" in err_str.lower()
+                
+                # If this is the last key, handle the error/fallback
+                if idx == len(gemini_keys) - 1:
+                    if is_quota_issue:
+                        fallback_res = mock_llm_fallback(prompt)
+                        return f"⚠️ **Notice: Gemini API quota exceeded (Rate Limit/429) for all keys. Falling back to local rule-based response:**\n\n{fallback_res}"
+                    return f"Error contacting Gemini API: {err_str}"
+                
+                # Otherwise, continue to next key
+                print(f"Retrying with the next Gemini API key...")
+        
+        return mock_llm_fallback(prompt)
+
+    # 2. Check OpenAI API configurations
     client = get_openai_client(user_key)
     if client:
         try:
-            # Route to Gemini model name if Gemini client config is loaded
-            is_gemini = bool(os.getenv("GEMINI_API_KEY"))
-            model_name = "gemini-2.5-flash" if is_gemini else "gpt-4o-mini"
-            
+            model_name = "gpt-4o-mini"
             response = client.chat.completions.create(
                 model=model_name,
                 messages=[
@@ -101,16 +143,10 @@ def call_llm(prompt: str, system_prompt: str = "You are a helpful AI research as
             return response.choices[0].message.content
         except Exception as e:
             err_str = str(e)
-            print(f"LLM API Error: {err_str}")
-            # If rate limited (429) or quota exceeded, fall back to mock response
-            if "429" in err_str or "quota" in err_str.lower() or "limit" in err_str.lower():
-                fallback_res = mock_llm_fallback(prompt)
-                return f"⚠️ **Notice: Gemini API quota exceeded (Rate Limit/429). Falling back to local rule-based response:**\n\n{fallback_res}"
-                
-            provider = "Gemini" if os.getenv("GEMINI_API_KEY") else "OpenAI"
-            return f"Error contacting {provider} API: {err_str}"
+            print(f"OpenAI API Error: {err_str}")
+            return f"Error contacting OpenAI API: {err_str}"
     
-    # Fallback/Mock LLM implementation for demo purposes when no API key exists
+    # 3. Fallback/Mock LLM implementation for demo purposes when no API key exists
     return mock_llm_fallback(prompt)
 
 def mock_llm_fallback(prompt: str) -> str:
@@ -205,28 +241,51 @@ def list_papers():
     """
     Retrieves metadata of all uploaded papers.
     """
+    # 1. Query Supabase if configured
+    if supabase_db.is_configured():
+        supabase_papers = supabase_db.list_papers()
+        if supabase_papers is not None:
+            return supabase_papers
+
+    # 2. Fallback to local disk
     papers = []
-    for filename in os.listdir(PAPERS_DIR):
-        if filename.endswith(".json") and not "_" in filename:
-            paper_path = os.path.join(PAPERS_DIR, filename)
-            try:
-                with open(paper_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if "id" in data:
-                        papers.append({
-                            "id": data.get("id"),
-                            "title": data.get("metadata", {}).get("title", "Unknown"),
-                            "authors": data.get("metadata", {}).get("authors", "Unknown"),
-                            "abstract": data.get("metadata", {}).get("abstract", "No abstract"),
-                            "page_count": data.get("page_count", 0),
-                            "upload_time": data.get("upload_time", "")
-                        })
-            except Exception as e:
-                print(f"Error loading {filename}: {e}")
+    if os.path.exists(PAPERS_DIR):
+        for filename in os.listdir(PAPERS_DIR):
+            if filename.endswith(".json") and not "_" in filename:
+                paper_path = os.path.join(PAPERS_DIR, filename)
+                try:
+                    with open(paper_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        if "id" in data:
+                            papers.append({
+                                "id": data.get("id"),
+                                "title": data.get("metadata", {}).get("title", "Unknown"),
+                                "authors": data.get("metadata", {}).get("authors", "Unknown"),
+                                "abstract": data.get("metadata", {}).get("abstract", "No abstract"),
+                                "page_count": data.get("page_count", 0),
+                                "upload_time": data.get("upload_time", "")
+                            })
+                except Exception as e:
+                    print(f"Error loading {filename}: {e}")
     return papers
 
 
 def load_paper_data(paper_id: str) -> Dict[str, Any]:
+    # 1. Try to load from Supabase if configured
+    if supabase_db.is_configured():
+        paper_data = supabase_db.get_paper(paper_id)
+        if paper_data:
+            # Cache locally so other code/FAISS RAG index files can use it
+            json_path = os.path.join(PAPERS_DIR, f"{paper_id}.json")
+            if not os.path.exists(json_path):
+                try:
+                    with open(json_path, "w", encoding="utf-8") as fw:
+                        json.dump(paper_data, fw, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    print(f"Error caching paper JSON locally: {e}")
+            return paper_data
+
+    # 2. Fallback to local disk
     json_path = os.path.join(PAPERS_DIR, f"{paper_id}.json")
     if not os.path.exists(json_path):
         raise FileNotFoundError("Paper not found")
@@ -244,6 +303,9 @@ def load_paper_data(paper_id: str) -> Dict[str, Any]:
             with open(json_path, "w", encoding="utf-8") as fw:
                 json.dump(paper_data, fw, ensure_ascii=False, indent=2)
             print(f"Successfully repaired page metadata for paper: {paper_id}")
+            # If Supabase is configured, also update Supabase
+            if supabase_db.is_configured():
+                supabase_db.save_paper(paper_id, paper_data)
         except Exception as e:
             print(f"Error enriching pages for paper {paper_id}: {e}")
             
@@ -396,6 +458,12 @@ def delete_paper(paper_id: str):
     if os.path.exists(json_path):
         os.remove(json_path)
         deleted = True
+        
+    # Delete from Supabase database if configured
+    if supabase_db.is_configured():
+        db_deleted = supabase_db.delete_paper(paper_id)
+        if db_deleted:
+            deleted = True
     if os.path.exists(pdf_path):
         os.remove(pdf_path)
         deleted = True
@@ -463,6 +531,10 @@ async def upload_paper(file: UploadFile = File(...), openai_key: Optional[str] =
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(parsed_data, f, ensure_ascii=False, indent=2)
         
+    # Save to Supabase database if configured
+    if supabase_db.is_configured():
+        supabase_db.save_paper(paper_id, parsed_data)
+        
     # Pre-index RAG engine
     try:
         get_or_create_rag_engine(paper_id, parsed_data, openai_key)
@@ -483,9 +555,12 @@ def summarize_paper(request: ChatRequest):
     """
     Generates structured summaries of a paper.
     """
-    json_path = os.path.join(PAPERS_DIR, f"{request.paper_id}.json")
-    if not os.path.exists(json_path):
+    try:
+        paper_data = load_paper_data(request.paper_id)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Paper not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading paper data: {str(e)}")
         
     # Check cache first
     summary_cache_path = os.path.join(PAPERS_DIR, f"{request.paper_id}_summary.txt")
@@ -495,9 +570,6 @@ def summarize_paper(request: ChatRequest):
                 return {"summary": f.read()}
         except Exception as e:
             print(f"Error reading summary cache: {e}")
-
-    with open(json_path, "r", encoding="utf-8") as f:
-        paper_data = json.load(f)
         
     title = paper_data["metadata"]["title"]
     abstract = paper_data["metadata"]["abstract"]
@@ -576,11 +648,13 @@ def compare_papers(request: CompareRequest):
     """
     Compares two papers side-by-side.
     """
-    json_path1 = os.path.join(PAPERS_DIR, f"{request.paper_id_1}.json")
-    json_path2 = os.path.join(PAPERS_DIR, f"{request.paper_id_2}.json")
-    
-    if not os.path.exists(json_path1) or not os.path.exists(json_path2):
+    try:
+        p1 = load_paper_data(request.paper_id_1)
+        p2 = load_paper_data(request.paper_id_2)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="One or both papers not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading papers: {str(e)}")
         
     # Check cache first
     ids = sorted([request.paper_id_1, request.paper_id_2])
@@ -591,11 +665,6 @@ def compare_papers(request: CompareRequest):
                 return {"comparison": f.read()}
         except Exception as e:
             print(f"Error reading compare cache: {e}")
-
-    with open(json_path1, "r", encoding="utf-8") as f:
-        p1 = json.load(f)
-    with open(json_path2, "r", encoding="utf-8") as f:
-        p2 = json.load(f)
         
     prompt = f"""Compare the following two research papers side-by-side.
     
@@ -635,12 +704,12 @@ def recommend_related_papers(request: ChatRequest):
     """
     Fetches related papers from arXiv.
     """
-    json_path = os.path.join(PAPERS_DIR, f"{request.paper_id}.json")
-    if not os.path.exists(json_path):
+    try:
+        paper_data = load_paper_data(request.paper_id)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Paper not found.")
-        
-    with open(json_path, "r", encoding="utf-8") as f:
-        paper_data = json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading paper: {str(e)}")
         
     title = paper_data["metadata"]["title"]
     
@@ -655,9 +724,12 @@ def detect_research_gaps(request: ChatRequest):
     """
     Analyzes the limitations and future work to output research gaps.
     """
-    json_path = os.path.join(PAPERS_DIR, f"{request.paper_id}.json")
-    if not os.path.exists(json_path):
+    try:
+        paper_data = load_paper_data(request.paper_id)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Paper not found.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading paper: {str(e)}")
         
     # Check cache first
     gaps_cache_path = os.path.join(PAPERS_DIR, f"{request.paper_id}_gaps.txt")
@@ -667,9 +739,6 @@ def detect_research_gaps(request: ChatRequest):
                 return {"gaps": f.read()}
         except Exception as e:
             print(f"Error reading gaps cache: {e}")
-
-    with open(json_path, "r", encoding="utf-8") as f:
-        paper_data = json.load(f)
         
     # Compile text about limitations and future work
     target_sections = []
@@ -725,13 +794,13 @@ def generate_literature_review(request: LitReviewRequest):
 
     papers_summary = []
     for pid in request.paper_ids:
-        json_path = os.path.join(PAPERS_DIR, f"{pid}.json")
-        if os.path.exists(json_path):
-            with open(json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                papers_summary.append(
-                    f"Title: {data['metadata']['title']}\nAbstract: {data['metadata']['abstract']}\n"
-                )
+        try:
+            data = load_paper_data(pid)
+            papers_summary.append(
+                f"Title: {data['metadata']['title']}\nAbstract: {data['metadata']['abstract']}\n"
+            )
+        except Exception as e:
+            print(f"Error loading paper {pid} for lit review: {e}")
                 
     if not papers_summary:
         raise HTTPException(status_code=400, detail="No valid papers found to review.")
@@ -778,12 +847,12 @@ def explain_concept(request: ConceptRequest):
     """
     Explains a concept/term using the paper as context.
     """
-    json_path = os.path.join(PAPERS_DIR, f"{request.paper_id}.json")
-    if not os.path.exists(json_path):
+    try:
+        paper_data = load_paper_data(request.paper_id)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Paper not found.")
-        
-    with open(json_path, "r", encoding="utf-8") as f:
-        paper_data = json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading paper: {str(e)}")
         
     engine = get_or_create_rag_engine(request.paper_id, paper_data, request.openai_key)
     
